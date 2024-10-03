@@ -1,10 +1,8 @@
 const TelegramBot = require('node-telegram-bot-api');
 
 // Replace with your Bot Token from BotFather
-const token = 'api_token';
+const token = '7787784256:AAHtl6vAdGniBQU1jwOLPL0QST4j6z_cMqU';
 const bot = new TelegramBot(token, { polling: true });
-
-let started = false
 
 const questions = [
   { id: 1, question: "What is the capital of France?", answer: "Paris" },
@@ -17,28 +15,23 @@ const questions = [
 const userStates = {}; // Store user progress, scores, unanswered questions
 const timers = {}; // Store timers for each user
 
+async function initializeUser(chatId) {
+  userStates[chatId] = {
+    started : false,
+    score: 0,
+    answered: new Set(),
+    currentQuestionIndex: 0,
+    startTime: Date.now(),
+  }; 
+}
+
 async function sendQuestion(chatId, questionIndex) {
   const question = questions[questionIndex];
   await bot.sendMessage(chatId, `Question ${question.id}: ${question.question}`);
 }
 
-async function startQuiz(chatId) {
-  userStates[chatId] = {
-    score: 0,
-    answered: new Set(),
-    currentQuestionIndex: 0,
-    startTime: Date.now(),
-  };
-
-  // Send the first question immediately
-  sendQuestion(chatId, 0);
-
-  // Schedule the remaining questions at their designated times
-  scheduleAllQuestions(chatId);
-}
-
 function scheduleAllQuestions(chatId) {
-  const questionIntervals = [2, 4, 6, 8].map(i=>i/8); // Send questions at these minute intervals
+  const questionIntervals = [2, 4, 6, 8]; // Send questions at these minute intervals
   questionIntervals.forEach((interval, index) => {
     const questionIndex = index + 1; // First question already sent
     const delay = interval * 60000; // Convert minutes to milliseconds
@@ -58,16 +51,16 @@ function scheduleAllQuestions(chatId) {
 
 bot.on('message', (msg) => {
   const chatId = msg.chat.id;
+  const user = userStates[chatId];
   const userAnswer = msg.text;
-
-  if(!userAnswer.startsWith("/") && started){
+  
+  if(!userAnswer.startsWith("/") && user && user.started){
     const [questionId, answer] = userAnswer.split(":").map(s => s.trim());
 
     if (questionId && answer) {
       const questionIndex = questions.findIndex(q => q.id === parseInt(questionId));
       if (questionIndex !== -1 && questionIndex <= userStates[chatId].currentQuestionIndex) {
         const question = questions[questionIndex];
-        const user = userStates[chatId];
 
         // Check if the question has already been answered
         if (user.answered.has(questionId)) {
@@ -89,16 +82,17 @@ bot.on('message', (msg) => {
 
             // Send the next question immediately if it is available
             if (nextQuestionIndex < questions.length) {
-              sendQuestion(chatId, nextQuestionIndex);
-              user.currentQuestionIndex = nextQuestionIndex; // Update current index
+              setTimeout(()=>{
+                sendQuestion(chatId, nextQuestionIndex);
+                user.currentQuestionIndex = nextQuestionIndex; // Update current index
+              },500)
             }
           }
 
           // Check if the user has answered all questions
           if (user.score === questions.length) {
             setTimeout(()=>{
-              bot.sendMessage(chatId, `Congratulations! You answered all questions correctly!
-                \n\nScore : {user.score}`);
+              bot.sendMessage(chatId, `Congratulations! You answered all questions correctly!\n\nScore : ${user.score}`);
               clearTimers(chatId); // Stop any pending timers
             },2000)
           }
@@ -113,8 +107,14 @@ bot.on('message', (msg) => {
     } else {
       bot.sendMessage(chatId, "Please provide your answer in the format 'question_number: your_answer'.");
     }
-  } else if(!userAnswer.startsWith("/")) {
-    bot.sendMessage(chatId,"Game is not yet started.Type '/start' to begin the game.")
+  } else if(userAnswer.startsWith("/")){
+    if(!['/start','/tesseract','/help','/dashboard'].includes(userAnswer)) {
+      bot.sendMessage(chatId, "Command does not exist!");
+    }
+  } else if(!userAnswer.startsWith("/") && !user){
+    bot.sendMessage(chatId, "Type '/start' to register yourself first!");
+  } else if(!userAnswer.startsWith("/") && !user.started) {
+    bot.sendMessage(chatId,"You haven't started the quiz yet .Type '/tesseract' to begin.")
   }
 });
 
@@ -127,16 +127,33 @@ function clearTimers(chatId) {
 
 bot.onText(/\/start/, (msg) => {
   const chatId = msg.chat.id;
-  if(started){
+  if(chatId in userStates){
+    bot.sendMessage(chatId,"Already registered!")
+    return;
+  }
+  bot.sendMessage(chatId,"Welcome to Tesseract! \nYou are now registered .Type '/tesseract' to begin the game");
+  initializeUser(chatId);
+});
+
+bot.onText(/\/tesseract/, (msg) => {
+  const chatId = msg.chat.id;
+  const user = userStates[chatId];
+  if(!user) {
+    bot.sendMessage(chatId,"Type '/start' to register yourself first!");
+    return;
+  }
+  if(user.started){
     bot.sendMessage(chatId,"Game has already started!")
     return;
   }
-  started = true
+  user.started = true
   bot.sendMessage(chatId,"Game started!");
   setTimeout(()=>{
-    console.log("loading...");
-  },1000)
-  startQuiz(chatId);
+    // Send the first question
+    sendQuestion(chatId, 0);
+    // Schedule the remaining questions at their designated times
+    scheduleAllQuestions(chatId);
+  },500) 
 });
 
 const displayDashboard = (chatId,user) => {
@@ -157,10 +174,18 @@ bot.onText(/\/dashboard/, (msg) => {
   const chatId = msg.chat.id;
   const user = userStates[chatId];
 
-  if (!user) {
-    bot.sendMessage(chatId, "You haven't started the quiz yet. Type '/start' to begin.");
+  if (!user){
+    bot.sendMessage(chatId, "Type '/start' to register yourself first!");
+    return;
+  } else if (!user.started){
+    bot.sendMessage(chatId, "You haven't started the quiz yet. Type '/tesseract' to begin.");
     return;
   }
   displayDashboard(chatId,user);
+});
+
+bot.onText(/\/help/, (msg) => {
+  const chatId = msg.chat.id;
+    bot.sendMessage(chatId,"/help : Command panel\n/start : User registration\n/tesseract : Begin the game\n/dashboard : Get your current score and progress");
 });
 
