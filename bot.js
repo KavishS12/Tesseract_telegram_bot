@@ -22,24 +22,26 @@ async function initializeUser(chatId) {
     score: 0,
     answered: new Set(),
     currentQuestionIndex: 0,
+    hint_count : 0,
+    hint_active : Array(5).fill(false),
     startTime: Date.now(),
   }; 
 }
 
 async function sendQuestion(chatId, questionIndex) {
   const question = questions[questionIndex];
-  
   // Send the local image
   if (question.image) {
     await bot.sendPhoto(chatId, fs.createReadStream(question.image));
   }
-  
   await bot.sendMessage(chatId, `Question ${question.id}: ${question.question}`);
-
+  setTimeout(()=>{
+    userStates[chatId].hint_active[questionIndex] = true
+  },60000/2)
 }
 
 function scheduleAllQuestions(chatId) {
-  const questionIntervals = [2, 4, 6, 8]; // Send questions at these minute intervals
+  const questionIntervals = [3, 6, 9 ,12].map((i)=>i/3); // Send questions at these minute intervals
   questionIntervals.forEach((interval, index) => {
     const questionIndex = index + 1; // First question already sent
     const delay = interval * 60000; // Convert minutes to milliseconds
@@ -71,7 +73,7 @@ bot.on('message', (msg) => {
         const question = questions[questionIndex];
 
         // Check if the question has already been answered
-        if (user.answered.has(questionId)) {
+        if (user.answered.has(parseInt(questionId))) {
           bot.sendMessage(chatId, `You've already answered question ${questionId}.`);
           return;
         }
@@ -81,7 +83,7 @@ bot.on('message', (msg) => {
           bot.sendMessage(chatId, `Correct answer for question ${questionId}!`);
 
           // Update score and mark question as answered
-          user.answered.add(questionId);
+          user.answered.add(parseInt(questionId));
           user.score += 1;
 
           // Check if all previous questions are answered
@@ -116,7 +118,7 @@ bot.on('message', (msg) => {
       bot.sendMessage(chatId, "Please provide your answer in the format 'question_number: your_answer'.");
     }
   } else if(userAnswer.startsWith("/")){
-    if(!['/start','/tesseract','/help','/dashboard'].includes(userAnswer)) {
+    if(!['/start','/tesseract','/help','/dashboard'].includes(userAnswer) && !/^\/hint_\d+$/.test(userAnswer)) {
       bot.sendMessage(chatId, "Command does not exist!");
     }
   } else if(!userAnswer.startsWith("/") && !user){
@@ -167,14 +169,15 @@ bot.onText(/\/tesseract/, (msg) => {
 const displayDashboard = (chatId,user) => {
   const score = user.score;
   const answeredQuestions = [...user.answered];
-  let response = `Your current score is: ${score}\n\nCorrectly answered questions:\n`;
+  let response = `Current score : ${score}\n\nCorrectly answered questions:\n`;
   if (answeredQuestions.length > 0) {
     answeredQuestions.forEach((id) => {
       response += `${id}\t`;
     });
   } else {
-    response += "You haven't answered any questions yet.";
+    response += "You haven't answered any questions yet.\n\n";
   }
+  response += `Number of hints used : ${user.hint_count}`
   bot.sendMessage(chatId, response);
 } 
 
@@ -195,5 +198,41 @@ bot.onText(/\/dashboard/, (msg) => {
 bot.onText(/\/help/, (msg) => {
   const chatId = msg.chat.id;
     bot.sendMessage(chatId,"/help : Command panel\n/start : User registration\n/tesseract : Begin the game\n/dashboard : Get your current score and progress");
+});
+
+bot.onText(/\/hint_(\d+)/, (msg, match) => {
+  const chatId = msg.chat.id;
+  const user = userStates[chatId];
+  if (!user){
+    bot.sendMessage(chatId, "Type '/start' to register yourself first!");
+    return;
+  } else if (!user.started){
+    bot.sendMessage(chatId, "You haven't started the quiz yet. Type '/tesseract' to begin.");
+    return;
+  }
+  const questionId = parseInt(match[1]);
+  const questionIndex = questions.findIndex(q => q.id === parseInt(questionId));
+  console.log(user.answered)
+  console.log(user.answered.has(questionId))
+  if(questionIndex === -1) {
+    bot.sendMessage(chatId, `Question ${questionId} doesn't exist! Please check the question number.`);
+    return;
+  } else if(questionIndex > user.currentQuestionIndex) {
+    console.log("here")
+    bot.sendMessage(chatId, `Question ${questionId} has not been activated yet!`);
+    return;
+  } else if (user.answered.has(questionId)) {
+    bot.sendMessage(chatId, `You've already answered question ${questionId}.`);
+    return;
+  }else if(user.hint_active[questionIndex] == false) {
+    bot.sendMessage(chatId, `Hint ${questionId} has not been activated yet!`);
+    return;
+  } else if(user.hint_count >= 2) {
+    bot.sendMessage(chatId, `No more hints available!!!`);
+    return;
+  } 
+  hint = questions[questionIndex].hint
+  user.hint_count += 1;
+  bot.sendMessage(chatId, `Hint for question ${questionId} :\n ${hint}\n\n Number of hints used : ${user.hint_count}`);
 });
 
