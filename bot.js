@@ -1,15 +1,16 @@
 const TelegramBot = require('node-telegram-bot-api');
+const fs = require('fs');
 
 // Replace with your Bot Token from BotFather
-const token = 'API_Token';
+const token = '7787784256:AAEeYcOkItGSzaYAgQrhiIaFuFv0AB7l54w';
 const bot = new TelegramBot(token, { polling: true });
 
 const questions = [
-  { id: 1, question: "What is the capital of France?", answer: "Paris" },
-  { id: 2, question: "What is the capital of Japan?", answer: "Tokyo" },
-  { id: 3, question: "What is the capital of India?", answer: "New Delhi" },
-  { id: 4, question: "What is the capital of Brazil?", answer: "Brasilia" },
-  { id: 5, question: "What is the capital of Australia?", answer: "Canberra" },
+  { id: 1, question: "What is the capital of France?", answer: "Paris", image: "./images/img1.png", hint: "Hint 1" },
+  { id: 2, question: "What is the capital of Japan?", answer: "Tokyo", image: "./images/img1.png", hint: "Hint 2" },
+  { id: 3, question: "What is the capital of India?", answer: "New Delhi", image: "./images/img1.png", hint: "Hint 3" },
+  { id: 4, question: "What is the capital of Brazil?", answer: "Brasilia", image: "./images/img1.png", hint: "Hint 4" },
+  { id: 5, question: "What is the capital of Australia?", answer: "Canberra", image: "./images/img1.png", hint: "Hint 5" },
 ];
 
 const userStates = {}; // Store user progress, scores, unanswered questions
@@ -27,7 +28,14 @@ async function initializeUser(chatId) {
 
 async function sendQuestion(chatId, questionIndex) {
   const question = questions[questionIndex];
+  
+  // Send the local image
+  if (question.image) {
+    await bot.sendPhoto(chatId, fs.createReadStream(question.image));
+  }
+  
   await bot.sendMessage(chatId, `Question ${question.id}: ${question.question}`);
+
 }
 
 function scheduleAllQuestions(chatId) {
