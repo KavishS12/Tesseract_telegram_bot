@@ -101,10 +101,11 @@ bot.on('message', (msg) => {
 
           // Check if the user has answered all questions
           if (user.score === questions.length) {
+            logTimestamp(chatId);
             setTimeout(()=>{
               bot.sendMessage(chatId, `Congratulations! You answered all questions correctly!\n\nScore : ${user.score}`);
               clearTimers(chatId); // Stop any pending timers
-            },2000)
+            },1000)
           }
         } else {
           bot.sendMessage(chatId, `Incorrect answer for question ${questionId}. Try again!`);
@@ -197,7 +198,7 @@ bot.onText(/\/dashboard/, (msg) => {
 
 bot.onText(/\/help/, (msg) => {
   const chatId = msg.chat.id;
-    bot.sendMessage(chatId,"/help : Command panel\n/start : User registration\n/tesseract : Begin the game\n/dashboard : Get your current score and progress");
+    bot.sendMessage(chatId,"/help : Command panel\n/start : User registration\n/tesseract : Begin the game\n/dashboard : Get your current score and progress\n/hint_x : Get hint for question number 'x'");
 });
 
 bot.onText(/\/hint_(\d+)/, (msg, match) => {
@@ -236,3 +237,36 @@ bot.onText(/\/hint_(\d+)/, (msg, match) => {
   bot.sendMessage(chatId, `Hint for question ${questionId} :\n ${hint}\n\n Number of hints used : ${user.hint_count}`);
 });
 
+const xlsx = require('xlsx');
+const moment = require('moment-timezone');
+const excelFilePath = './quiz_timestamps.xlsx';
+const preferredTimezone = 'Asia/Kolkata';
+
+// Initialize the Excel sheet if it doesn't exist
+if (!fs.existsSync(excelFilePath)) {
+  const workbook = xlsx.utils.book_new();
+  const worksheet = xlsx.utils.json_to_sheet([]);
+  xlsx.utils.book_append_sheet(workbook, worksheet, 'Timestamps');
+  xlsx.writeFile(workbook, excelFilePath);
+}
+
+// Function to log user timestamp
+const logTimestamp = (chatId) => {
+  const workbook = xlsx.readFile(excelFilePath);
+  const worksheet = workbook.Sheets['Timestamps'];
+  // Get current time in preferred timezone, formatted as HH:mm:ss
+  const timestamp = moment().tz(preferredTimezone).format('HH:mm:ss');
+  // Append a new row for the user
+  const newRow = {
+    'Chat ID': chatId,
+    'Completion Time': timestamp,
+  };
+  // Get existing data from the sheet and add new row
+  const data = xlsx.utils.sheet_to_json(worksheet);
+  data.push(newRow);
+  // Convert back to worksheet and save the file
+  const newSheet = xlsx.utils.json_to_sheet(data);
+  workbook.Sheets['Timestamps'] = newSheet;
+  xlsx.writeFile(workbook, excelFilePath);
+  console.log(`Timestamp logged for user ${chatId} at ${timestamp} (${preferredTimezone})`);
+};
