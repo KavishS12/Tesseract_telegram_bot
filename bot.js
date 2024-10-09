@@ -6,12 +6,14 @@ const token = '7787784256:AAEeYcOkItGSzaYAgQrhiIaFuFv0AB7l54w';
 const bot = new TelegramBot(token, { polling: true });
 
 const questions = [
-  { id: 1, question: "What is the capital of France?", answer: "Paris", image: "./images/img1.png", hint: "Hint 1" },
-  { id: 2, question: "What is the capital of Japan?", answer: "Tokyo", image: "./images/img1.png", hint: "Hint 2" },
-  { id: 3, question: "What is the capital of India?", answer: "New Delhi", image: "./images/img1.png", hint: "Hint 3" },
-  { id: 4, question: "What is the capital of Brazil?", answer: "Brasilia", image: "./images/img1.png", hint: "Hint 4" },
-  { id: 5, question: "What is the capital of Australia?", answer: "Canberra", image: "./images/img1.png", hint: "Hint 5" },
+  { id: 1, question: "Question 1", answer: "Ans1", image: "./images/img1.png", hint: "Hint 1" },
+  { id: 2, question: "Question 2", answer: "Ans2", image: "./images/img2.png", hint: "Hint 2" },
+  { id: 3, question: "Question 3", answer: "Ans3", image: "./images/img3.png", hint: "Hint 3" },
+  { id: 4, question: "Question 4", answer: "Ans4", image: "./images/img4.png", hint: "Hint 4" },
+  { id: 5, question: "Question 5", answer: "Ans5", image: "./images/img5.png", hint: "Hint 5" },
 ];
+
+const teamIDs = [1234,5678,2345,9999,1111,3322]
 
 const userStates = {}; // Store user progress, scores, unanswered questions
 const timers = {}; // Store timers for each user
@@ -19,6 +21,7 @@ const timers = {}; // Store timers for each user
 async function initializeUser(chatId) {
   userStates[chatId] = {
     started : false,
+    teamId : null,
     score: 0,
     answered: new Set(),
     currentQuestionIndex: 0,
@@ -103,7 +106,7 @@ bot.on('message', (msg) => {
           if (user.score === questions.length) {
             logTimestamp(chatId);
             setTimeout(()=>{
-              bot.sendMessage(chatId, `Congratulations! You answered all questions correctly!\n\nScore : ${user.score}`);
+              bot.sendMessage(chatId, `Congratulations! You answered all questions correctly!\n\nTimestamped logged for Team Id ${user.teamId}`);
               clearTimers(chatId); // Stop any pending timers
             },1000)
           }
@@ -119,13 +122,13 @@ bot.on('message', (msg) => {
       bot.sendMessage(chatId, "Please provide your answer in the format 'question_number: your_answer'.");
     }
   } else if(userAnswer.startsWith("/")){
-    if(!['/start','/tesseract','/help','/dashboard'].includes(userAnswer) && !/^\/hint_\d+$/.test(userAnswer)) {
+    if(!['/start','/help','/dashboard'].includes(userAnswer) && !/^\/hint_\d+$/.test(userAnswer) && !/^\/tesseract_\d+$/.test(userAnswer)) {
       bot.sendMessage(chatId, "Command does not exist!");
     }
   } else if(!userAnswer.startsWith("/") && !user){
     bot.sendMessage(chatId, "Type '/start' to register yourself first!");
   } else if(!userAnswer.startsWith("/") && !user.started) {
-    bot.sendMessage(chatId,"You haven't started the quiz yet .Type '/tesseract' to begin.")
+    bot.sendMessage(chatId,"You haven't started the quiz yet .Type '/tesseract_teamID to begin.")
   }
 });
 
@@ -142,11 +145,11 @@ bot.onText(/\/start/, (msg) => {
     bot.sendMessage(chatId,"Already registered!")
     return;
   }
-  bot.sendMessage(chatId,"Welcome to Tesseract! \nYou are now registered .Type '/tesseract' to begin the game");
+  bot.sendMessage(chatId,"Welcome to Tesseract! \nYou are now registered .Type '/tesseract_teamID to begin the game");
   initializeUser(chatId);
 });
 
-bot.onText(/\/tesseract/, (msg) => {
+bot.onText(/\/tesseract_(\d+)/, (msg,match) => {
   const chatId = msg.chat.id;
   const user = userStates[chatId];
   if(!user) {
@@ -157,7 +160,13 @@ bot.onText(/\/tesseract/, (msg) => {
     bot.sendMessage(chatId,"Game has already started!")
     return;
   }
-  user.started = true
+  const teamId = parseInt(match[1]);
+  if(!teamIDs.includes(teamId)){
+    bot.sendMessage(chatId,"Team Id not valid.");
+    return;
+  }
+  user.started = true;
+  user.teamId = teamId;
   bot.sendMessage(chatId,"Game started!");
   setTimeout(()=>{
     // Send the first question
@@ -170,15 +179,15 @@ bot.onText(/\/tesseract/, (msg) => {
 const displayDashboard = (chatId,user) => {
   const score = user.score;
   const answeredQuestions = [...user.answered];
-  let response = `Current score : ${score}\n\nCorrectly answered questions:\n`;
+  let response = `Current score : ${score}\n\nCorrectly answered questions:`;
   if (answeredQuestions.length > 0) {
     answeredQuestions.forEach((id) => {
       response += `${id}\t`;
     });
   } else {
-    response += "You haven't answered any questions yet.\n\n";
+    response += "You haven't answered any questions yet.";
   }
-  response += `Number of hints used : ${user.hint_count}`
+  response += `\n\nNumber of hints used : ${user.hint_count}`
   bot.sendMessage(chatId, response);
 } 
 
@@ -190,7 +199,7 @@ bot.onText(/\/dashboard/, (msg) => {
     bot.sendMessage(chatId, "Type '/start' to register yourself first!");
     return;
   } else if (!user.started){
-    bot.sendMessage(chatId, "You haven't started the quiz yet. Type '/tesseract' to begin.");
+    bot.sendMessage(chatId, "You haven't started the quiz yet. Type '/tesseract_teamID to begin.");
     return;
   }
   displayDashboard(chatId,user);
@@ -198,7 +207,7 @@ bot.onText(/\/dashboard/, (msg) => {
 
 bot.onText(/\/help/, (msg) => {
   const chatId = msg.chat.id;
-    bot.sendMessage(chatId,"/help : Command panel\n/start : User registration\n/tesseract : Begin the game\n/dashboard : Get your current score and progress\n/hint_x : Get hint for question number 'x'");
+    bot.sendMessage(chatId,"/help : Command panel\n/start : User registration\n/tesseract_(teamID) : Begin the game\n/dashboard : Get your current score and progress\n/hint_x : Get hint for question number 'x'");
 });
 
 bot.onText(/\/hint_(\d+)/, (msg, match) => {
@@ -208,18 +217,15 @@ bot.onText(/\/hint_(\d+)/, (msg, match) => {
     bot.sendMessage(chatId, "Type '/start' to register yourself first!");
     return;
   } else if (!user.started){
-    bot.sendMessage(chatId, "You haven't started the quiz yet. Type '/tesseract' to begin.");
+    bot.sendMessage(chatId, "You haven't started the quiz yet. Type '/tesseract_teamID to begin.");
     return;
   }
   const questionId = parseInt(match[1]);
   const questionIndex = questions.findIndex(q => q.id === parseInt(questionId));
-  console.log(user.answered)
-  console.log(user.answered.has(questionId))
   if(questionIndex === -1) {
     bot.sendMessage(chatId, `Question ${questionId} doesn't exist! Please check the question number.`);
     return;
   } else if(questionIndex > user.currentQuestionIndex) {
-    console.log("here")
     bot.sendMessage(chatId, `Question ${questionId} has not been activated yet!`);
     return;
   } else if (user.answered.has(questionId)) {
@@ -239,7 +245,7 @@ bot.onText(/\/hint_(\d+)/, (msg, match) => {
 
 const xlsx = require('xlsx');
 const moment = require('moment-timezone');
-const excelFilePath = './quiz_timestamps.xlsx';
+const excelFilePath = './completion_timestamps.xlsx';
 const preferredTimezone = 'Asia/Kolkata';
 
 // Initialize the Excel sheet if it doesn't exist
@@ -258,7 +264,7 @@ const logTimestamp = (chatId) => {
   const timestamp = moment().tz(preferredTimezone).format('HH:mm:ss');
   // Append a new row for the user
   const newRow = {
-    'Chat ID': chatId,
+    'Team ID': userStates[chatId].teamId,
     'Completion Time': timestamp,
   };
   // Get existing data from the sheet and add new row
@@ -268,5 +274,4 @@ const logTimestamp = (chatId) => {
   const newSheet = xlsx.utils.json_to_sheet(data);
   workbook.Sheets['Timestamps'] = newSheet;
   xlsx.writeFile(workbook, excelFilePath);
-  console.log(`Timestamp logged for user ${chatId} at ${timestamp} (${preferredTimezone})`);
 };
