@@ -2,7 +2,7 @@ const TelegramBot = require('node-telegram-bot-api');
 const fs = require('fs');
 
 // Replace with your Bot Token from BotFather
-const token = '7787784256:AAEeYcOkItGSzaYAgQrhiIaFuFv0AB7l54w';
+const token = '7787784256:AAH98vvyecRZFtmxeGHC8RB4hWqHoSCJn04';
 const bot = new TelegramBot(token, { polling: true });
 
 const questions = [
@@ -243,35 +243,74 @@ bot.onText(/\/hint_(\d+)/, (msg, match) => {
   bot.sendMessage(chatId, `Hint for question ${questionId} :\n ${hint}\n\n Number of hints used : ${user.hint_count}`);
 });
 
-const xlsx = require('xlsx');
+
+const { google } = require('googleapis');
 const moment = require('moment-timezone');
-const excelFilePath = './completion_timestamps.xlsx';
-const preferredTimezone = 'Asia/Kolkata';
 
-// Initialize the Excel sheet if it doesn't exist
-if (!fs.existsSync(excelFilePath)) {
-  const workbook = xlsx.utils.book_new();
-  const worksheet = xlsx.utils.json_to_sheet([]);
-  xlsx.utils.book_append_sheet(workbook, worksheet, 'Timestamps');
-  xlsx.writeFile(workbook, excelFilePath);
-}
+const SHEET_ID = '1T5rk7vraQH_3uwivftgZlq3fFKF2dw1onfSB9kXMH0s';
+const CREDENTIALS_PATH = 'fiery-chess-438220-e8-f338a6415af6.json';
 
-// Function to log user timestamp
-const logTimestamp = (chatId) => {
-  const workbook = xlsx.readFile(excelFilePath);
-  const worksheet = workbook.Sheets['Timestamps'];
-  // Get current time in preferred timezone, formatted as HH:mm:ss
-  const timestamp = moment().tz(preferredTimezone).format('HH:mm:ss');
-  // Append a new row for the user
-  const newRow = {
-    'Team ID': userStates[chatId].teamId,
-    'Completion Time': timestamp,
-  };
-  // Get existing data from the sheet and add new row
-  const data = xlsx.utils.sheet_to_json(worksheet);
-  data.push(newRow);
-  // Convert back to worksheet and save the file
-  const newSheet = xlsx.utils.json_to_sheet(data);
-  workbook.Sheets['Timestamps'] = newSheet;
-  xlsx.writeFile(workbook, excelFilePath);
+const auth = new google.auth.GoogleAuth({
+  keyFile: CREDENTIALS_PATH,
+  scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+});
+
+const sheets = google.sheets({ version: 'v4', auth });
+
+const logTimestamp = async (chatId) => {
+  const user = userStates[chatId];
+  if (!user) return;
+
+  const timestamp = moment().tz('Asia/Kolkata').format('HH:mm:ss');
+
+  const values = [
+    [user.teamId, timestamp],
+  ];
+
+  try {
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: SHEET_ID,
+      range: 'Sheet1!A:B', 
+      valueInputOption: 'USER_ENTERED',
+      resource: {
+        values: values,
+      },
+    });
+    console.log(`Timestamp for Team ID ${user.teamId} logged successfully.`);
+  } catch (error) {
+    console.error('Error logging timestamp:', error);
+  }
 };
+
+// const xlsx = require('xlsx');
+// const moment = require('moment-timezone');
+// const excelFilePath = './completion_timestamps.xlsx';
+// const preferredTimezone = 'Asia/Kolkata';
+
+// // Initialize the Excel sheet if it doesn't exist
+// if (!fs.existsSync(excelFilePath)) {
+//   const workbook = xlsx.utils.book_new();
+//   const worksheet = xlsx.utils.json_to_sheet([]);
+//   xlsx.utils.book_append_sheet(workbook, worksheet, 'Timestamps');
+//   xlsx.writeFile(workbook, excelFilePath);
+// }
+
+// // Function to log user timestamp
+// const logTimestamp = (chatId) => {
+//   const workbook = xlsx.readFile(excelFilePath);
+//   const worksheet = workbook.Sheets['Timestamps'];
+//   // Get current time in preferred timezone, formatted as HH:mm:ss
+//   const timestamp = moment().tz(preferredTimezone).format('HH:mm:ss');
+//   // Append a new row for the user
+//   const newRow = {
+//     'Team ID': userStates[chatId].teamId,
+//     'Completion Time': timestamp,
+//   };
+//   // Get existing data from the sheet and add new row
+//   const data = xlsx.utils.sheet_to_json(worksheet);
+//   data.push(newRow);
+//   // Convert back to worksheet and save the file
+//   const newSheet = xlsx.utils.json_to_sheet(data);
+//   workbook.Sheets['Timestamps'] = newSheet;
+//   xlsx.writeFile(workbook, excelFilePath);
+// };
