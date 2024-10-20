@@ -1,19 +1,58 @@
+const express = require('express');
+const bodyParser = require('body-parser');
+const app = express();
+
+app.use(bodyParser.json());
+
+app.post('/', (req, res) => {
+  bot.processUpdate(req.body);
+  res.sendStatus(200);
+});
+
+const PORT = process.env.PORT || 8080;
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
+
+
 const TelegramBot = require('node-telegram-bot-api');
 const fs = require('fs');
 
-// Replace with your Bot Token from BotFather
-const token = '7787784256:AAH98vvyecRZFtmxeGHC8RB4hWqHoSCJn04';
-const bot = new TelegramBot(token, { polling: true });
+const token = 'API-TOKEN';
+const bot = new TelegramBot(token);
+
+//Handle the root route
+
+app.get('/', (req, res) => {
+  res.send('Bot is up and running!');
+});
 
 const questions = [
-  { id: 1, question: "Question 1", answer: "Ans1", image: "./images/img1.png", hint: "Hint 1" },
-  { id: 2, question: "Question 2", answer: "Ans2", image: "./images/img2.png", hint: "Hint 2" },
-  { id: 3, question: "Question 3", answer: "Ans3", image: "./images/img3.png", hint: "Hint 3" },
-  { id: 4, question: "Question 4", answer: "Ans4", image: "./images/img4.png", hint: "Hint 4" },
-  { id: 5, question: "Question 5", answer: "Ans5", image: "./images/img5.png", hint: "Hint 5" },
+  { id: 1, question: "question1", answer: "answer1", image: "./images/q1.jpg", hint: "hint1" },
+  { id: 2, question: "question2", answer: "answer2", image: "./images/q2.jpg", hint: "hint2" },
+  { id: 3, question: "question3", answer: "answer3", image: "./images/q3.jpg", hint: "hint3" },
+  { id: 4, question: "question4", answer: "answer4", image: "./images/q4.jpg", hint: "hint4" },
+  { id: 5, question: "question5", answer: "answer5", image: "./images/q5.jpg", hint: "hint5" },
+  { id: 6, question: "question6", answer: "answer6", image: "./images/q6.jpg", hint: "hint6" },
+  { id: 7, question: "question7", answer: "answer7", image: "./images/q7.jpg", hint: "hint7" },
+  { id: 8, question: "question8", answer: "answer8", image: "./images/q8.jpg", hint: "hint8" },
+  { id: 9, question: "question9", answer: "answer9", image: "./images/q9.jpg", hint: "hint9" },
+  { id: 10, question: "question10", answer: "answer10", image: "./images/q10.jpg", hint: "hint10" },
+  { id: 11, question: "question11", answer: "answer11", image: "./images/q11.jpg", hint: "hint11" },
+  { id: 12, question: "question12", answer: "answer12", image: "./images/q12.jpg", hint: "hint12" }
 ];
 
-const teamIDs = [1234,5678,2345,9999,1111,3322]
+const teamIDs = [
+  10324, 10754, 10773, 11185, 11280, 10832, 11627, 11444, 11166, 10830, 
+  10156, 11016, 11196, 11688, 11068, 10666, 11015, 10865, 10568, 11497, 
+  11742, 10483, 11667, 10739, 10425, 11128, 11002, 11565, 10651, 10003, 
+  10632, 10729, 11620, 10007, 10415, 11121, 10816, 11743, 10244, 11069, 
+  10139, 11506, 10731, 11086, 11201, 10046, 10916, 10527, 10878, 11732, 
+  11490, 11532, 10366, 11228, 10362, 10218, 11718, 10604, 11268, 11518, 
+  11469, 10400, 10283, 10247, 10261
+];
+
+const teamIDs_registered = []
 
 const userStates = {}; // Store user progress, scores, unanswered questions
 const timers = {}; // Store timers for each user
@@ -25,8 +64,8 @@ async function initializeUser(chatId) {
     score: 0,
     answered: new Set(),
     currentQuestionIndex: 0,
-    hint_count : 0,
-    hint_active : Array(5).fill(false),
+    hints_used : new Set(),
+    hint_active : Array(12).fill(false),
     startTime: Date.now(),
   }; 
 }
@@ -39,12 +78,12 @@ async function sendQuestion(chatId, questionIndex) {
   }
   await bot.sendMessage(chatId, `Question ${question.id}: ${question.question}`);
   setTimeout(()=>{
-    userStates[chatId].hint_active[questionIndex] = true
-  },60000/2)
+    userStates[chatId].hint_active[questionIndex] = true //activate hint after 1.5 min on sending question
+  },90000)
 }
 
 function scheduleAllQuestions(chatId) {
-  const questionIntervals = [3, 6, 9 ,12].map((i)=>i/3); // Send questions at these minute intervals
+  const questionIntervals = [3, 6, 9 , 12, 15, 18, 21, 24, 27, 30, 33]; // Send questions at these minute intervals
   questionIntervals.forEach((interval, index) => {
     const questionIndex = index + 1; // First question already sent
     const delay = interval * 60000; // Convert minutes to milliseconds
@@ -106,7 +145,7 @@ bot.on('message', (msg) => {
           if (user.score === questions.length) {
             logTimestamp(chatId);
             setTimeout(()=>{
-              bot.sendMessage(chatId, `Congratulations! You answered all questions correctly!\n\nTimestamped logged for Team Id ${user.teamId}`);
+              bot.sendMessage(chatId, `Congratulations! You answered all questions correctly!\n\nTimestamped logged for Team Id ${Number(String(user.teamId).slice(0, 5))}`);
               clearTimers(chatId); // Stop any pending timers
             },1000)
           }
@@ -165,8 +204,13 @@ bot.onText(/\/tesseract_(\d+)/, (msg,match) => {
     bot.sendMessage(chatId,"Team Id not valid.");
     return;
   }
+  if(teamIDs_registered.includes(teamId)){
+    bot.sendMessage(chatId,"Team Id already present in the game.");
+    return;
+  }
   user.started = true;
   user.teamId = teamId;
+  teamIDs_registered.push(teamId);
   bot.sendMessage(chatId,"Game started!");
   setTimeout(()=>{
     // Send the first question
@@ -187,7 +231,7 @@ const displayDashboard = (chatId,user) => {
   } else {
     response += "You haven't answered any questions yet.";
   }
-  response += `\n\nNumber of hints used : ${user.hint_count}`
+  response += `\n\nNumber of hints used : ${user.hints_used.size}`;
   bot.sendMessage(chatId, response);
 } 
 
@@ -207,7 +251,7 @@ bot.onText(/\/dashboard/, (msg) => {
 
 bot.onText(/\/help/, (msg) => {
   const chatId = msg.chat.id;
-    bot.sendMessage(chatId,"/help : Command panel\n/start : User registration\n/tesseract_(teamID) : Begin the game\n/dashboard : Get your current score and progress\n/hint_x : Get hint for question number 'x'");
+    bot.sendMessage(chatId,"/help : Command panel\n/start : User registration\n/tesseract_teamID : Begin the game\n/dashboard : Get your current score and progress\n/hint_x : Get hint for question number 'x'");
 });
 
 bot.onText(/\/hint_(\d+)/, (msg, match) => {
@@ -234,21 +278,22 @@ bot.onText(/\/hint_(\d+)/, (msg, match) => {
   }else if(user.hint_active[questionIndex] == false) {
     bot.sendMessage(chatId, `Hint ${questionId} has not been activated yet!`);
     return;
-  } else if(user.hint_count >= 2) {
+  } else if(!user.hints_used.has(questionId) && user.hints_used.size >= 4) {
     bot.sendMessage(chatId, `No more hints available!!!`);
     return;
   } 
   hint = questions[questionIndex].hint
-  user.hint_count += 1;
-  bot.sendMessage(chatId, `Hint for question ${questionId} :\n ${hint}\n\n Number of hints used : ${user.hint_count}`);
+  user.hints_used.add(questionId);
+  bot.sendMessage(chatId, `Hint for question ${questionId} : ${hint}\n\nNumber of hints used : ${user.hints_used.size}`);
 });
 
 
 const { google } = require('googleapis');
 const moment = require('moment-timezone');
 
-const SHEET_ID = '1T5rk7vraQH_3uwivftgZlq3fFKF2dw1onfSB9kXMH0s';
-const CREDENTIALS_PATH = 'fiery-chess-438220-e8-f338a6415af6.json';
+const SHEET_ID = 'GOOGLE-SHEET-Id';
+//get credentials path i.e. json file downloaded when key created for service account in google cloud console
+const CREDENTIALS_PATH = 'credentials.json';
 
 const auth = new google.auth.GoogleAuth({
   keyFile: CREDENTIALS_PATH,
@@ -262,9 +307,9 @@ const logTimestamp = async (chatId) => {
   if (!user) return;
 
   const timestamp = moment().tz('Asia/Kolkata').format('HH:mm:ss');
-
+  let tId = Number(String(user.teamId).slice(0, 5));
   const values = [
-    [user.teamId, timestamp],
+    [tId, timestamp],
   ];
 
   try {
@@ -276,41 +321,17 @@ const logTimestamp = async (chatId) => {
         values: values,
       },
     });
-    console.log(`Timestamp for Team ID ${user.teamId} logged successfully.`);
   } catch (error) {
     console.error('Error logging timestamp:', error);
   }
 };
 
-// const xlsx = require('xlsx');
-// const moment = require('moment-timezone');
-// const excelFilePath = './completion_timestamps.xlsx';
-// const preferredTimezone = 'Asia/Kolkata';
+// bot.on('message', (msg) => {
+//   const chatId = msg.chat.id;
+//   bot.sendMessage(chatId,"Server inactive currently");
+// });
 
-// // Initialize the Excel sheet if it doesn't exist
-// if (!fs.existsSync(excelFilePath)) {
-//   const workbook = xlsx.utils.book_new();
-//   const worksheet = xlsx.utils.json_to_sheet([]);
-//   xlsx.utils.book_append_sheet(workbook, worksheet, 'Timestamps');
-//   xlsx.writeFile(workbook, excelFilePath);
-// }
-
-// // Function to log user timestamp
-// const logTimestamp = (chatId) => {
-//   const workbook = xlsx.readFile(excelFilePath);
-//   const worksheet = workbook.Sheets['Timestamps'];
-//   // Get current time in preferred timezone, formatted as HH:mm:ss
-//   const timestamp = moment().tz(preferredTimezone).format('HH:mm:ss');
-//   // Append a new row for the user
-//   const newRow = {
-//     'Team ID': userStates[chatId].teamId,
-//     'Completion Time': timestamp,
-//   };
-//   // Get existing data from the sheet and add new row
-//   const data = xlsx.utils.sheet_to_json(worksheet);
-//   data.push(newRow);
-//   // Convert back to worksheet and save the file
-//   const newSheet = xlsx.utils.json_to_sheet(data);
-//   workbook.Sheets['Timestamps'] = newSheet;
-//   xlsx.writeFile(workbook, excelFilePath);
-// };
+// // Handle the root route
+// app.get('/', (req, res) => {
+//   res.send('Server inactive!');
+// });

@@ -1,0 +1,4 @@
+runtime: nodejs20
+env: standard
+entrypoint: node bot.js
+
